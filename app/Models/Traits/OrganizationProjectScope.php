@@ -10,6 +10,10 @@ trait OrganizationProjectScope
     public static function bootOrganizationProjectScope(): void
     {
         static::addGlobalScope('organization_project', function (Builder $builder) {
+            if (!app()->has('currentOrganization')) {
+                return;
+            }
+
             $organization = app('currentOrganization');
 
             if (! $organization instanceof Organization) {

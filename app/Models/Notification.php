@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\NotificationCreated;
 use App\Models\Traits\OrganizationProjectScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,10 @@ class Notification extends Model
     protected $casts = [
         'payload' => 'array',
         'sent_at' => 'datetime',
+    ];
+
+    protected $dispatchesEvents = [
+        'created' => NotificationCreated::class,
     ];
 
     public function project(): BelongsTo
