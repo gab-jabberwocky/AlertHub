@@ -50,8 +50,8 @@ class MetricsServiceProvider extends ServiceProvider
     {
         $listen = [
             Events\DigestScheduled::class => [
-                Listeners\CalculateDigestWindow::class,
                 Listeners\GenerateDigestId::class,
+                Listeners\CalculateDigestWindow::class,
                 Listeners\AssignDigestPriority::class,
             ],
         ];

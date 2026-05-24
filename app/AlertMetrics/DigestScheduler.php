@@ -31,7 +31,7 @@ class DigestScheduler
         $subscribers = \App\Models\Subscriber::where('project_id', $projectId)
             ->whereHas('notifications', function ($query) use ($date) {
                 $query->whereDate('created_at', $date)
-                    ->where('status', 'sent');
+                    ->where('status', 'pending');
             })
             ->get();
 
@@ -40,7 +40,7 @@ class DigestScheduler
         foreach ($subscribers as $subscriber) {
             $alertIds = \App\Models\Notification::where('subscriber_id', $subscriber->id)
                 ->whereDate('created_at', $date)
-                ->where('status', 'sent')
+                ->where('status', 'pending')
                 ->pluck('id')
                 ->toArray();
 
@@ -60,6 +60,7 @@ class DigestScheduler
             // Dispatch the digest processing job
             ProcessAlertDigest::dispatch(
                 $subscriber->id,
+                $projectId,
                 $date,
                 $alertIds,
                 $digestType
@@ -92,7 +93,7 @@ class DigestScheduler
         return [
             'date' => $date,
             'total_alerts' => $dailyCount,
-            'hourly_breakdown' => $this->aggregator->getHourlyBreakdown($date),
+            'hourly_breakdown' => $this->aggregator->getHourlyBreakdown($projectId, $date),
         ];
     }
 }

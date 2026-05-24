@@ -4,6 +4,7 @@ namespace App\AlertMetrics;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 
 class SubscriberResolver
 {
@@ -32,24 +33,25 @@ class SubscriberResolver
         }
 
         // Try to find existing subscriber
-        $subscriber = \App\Models\Subscriber::where('project_id', $projectId)
-            ->where('email', $email)
-            ->first();
+        // FIX 1: Use external_id if email is null so locks don't globally collide.
+        $subscriber = $this->findSubscriber($projectId, $email, $externalId);
 
         if ($subscriber) {
             return $subscriber;
         }
 
-        // Subscriber doesn't exist — create with lock to prevent duplicates
-        $lockKey = "subscriber-lock:{$email}";
+        // Subscriber doesn't exist — create with lock to prevent duplicates.
+        $identifier = $email ?: $externalId;
+        $lockKey = "subscriber-lock:{$identifier}";
+
         $lock = Cache::lock($lockKey, 5);
 
-        if ($lock->get()) {
-            try {
+        try {
+            // FIX 2: Use block(5) to wait up to 5 seconds for the lock 
+            // instead of failing silently when concurrency spikes.
+            if ($lock->block(5)) {
                 // Double-check after acquiring lock
-                $subscriber = \App\Models\Subscriber::where('project_id', $projectId)
-                    ->where('email', $email)
-                    ->first();
+                $subscriber = $this->findSubscriber($projectId, $email, $externalId);
 
                 if ($subscriber) {
                     return $subscriber;
@@ -67,19 +69,19 @@ class SubscriberResolver
                 Log::info('SubscriberResolver: Created new subscriber', [
                     'project_id' => $projectId,
                     'subscriber_id' => $subscriber->id,
-                    'email' => $email,
+                    'identifier' => $identifier,
                 ]);
 
                 return $subscriber;
-            } finally {
-                $lock->release();
             }
+        } catch (LockTimeoutException $e) {
+            Log::error('SubscriberResolver: Could not acquire lock (timeout) for subscriber creation', [
+                'project_id' => $projectId,
+                'identifier' => $identifier,
+            ]);
+        } finally {
+            optional($lock)->release();
         }
-
-        Log::warning('SubscriberResolver: Could not acquire lock for subscriber creation', [
-            'project_id' => $projectId,
-            'email' => $email,
-        ]);
 
         return null;
     }
@@ -166,5 +168,22 @@ class SubscriberResolver
             'first_seen_event' => $payload['event_type'] ?? null,
             'created_via' => 'webhook',
         ];
+    }
+
+    /**
+     * Find subscriber from payload for subscriber record.
+     */
+    protected function findSubscriber(int $projectId, string $email = null, string $externalId = null): ?\App\Models\Subscriber
+    {
+        return \App\Models\Subscriber::where('project_id', $projectId)
+            ->where(function ($query) use ($email, $externalId) {
+                if ($email) {
+                    $query->orWhere('email', $email);
+                }
+                if ($externalId) {
+                    $query->orWhere('external_id', $externalId);
+                }
+            })
+            ->first();
     }
 }

@@ -41,6 +41,11 @@ class ProcessAlertDigest implements ShouldQueue, ShouldBeUnique
     protected int $subscriberId;
 
     /**
+     * @var int
+     */
+    protected int $projectId;
+
+    /**
      * @var string
      */
     protected string $date;
@@ -58,9 +63,10 @@ class ProcessAlertDigest implements ShouldQueue, ShouldBeUnique
     /**
      * Create a new job instance.
      */
-    public function __construct(int $subscriberId, string $date, array $alertIds, string $digestType = 'daily')
+    public function __construct(int $subscriberId, int $projectId, string $date, array $alertIds, string $digestType = 'daily')
     {
         $this->subscriberId = $subscriberId;
+        $this->projectId = $projectId;
         $this->date = $date;
         $this->alertIds = $alertIds;
         $this->digestType = $digestType;
@@ -76,7 +82,10 @@ class ProcessAlertDigest implements ShouldQueue, ShouldBeUnique
      */
     public function uniqueId(): string
     {
-        return $this->subscriberId . ':' . $this->date;
+        // Create a hash of the alert IDs being processed
+        $alertHash = md5(implode(',', $this->alertIds));
+
+        return $this->subscriberId . ':' . $this->date . ':' . $alertHash;
     }
 
     /**
@@ -112,7 +121,7 @@ class ProcessAlertDigest implements ShouldQueue, ShouldBeUnique
         $digestContent = $this->buildDigestContent($notifications, $engagementScore);
 
         // Record the digest was processed
-        $aggregator->recordAlert($notifications->first()->id);
+        $aggregator->recordAlert($this->projectId, $notifications->first()->id);
 
         // Dispatch the actual digest delivery
         \App\Jobs\SendNotification::dispatch(

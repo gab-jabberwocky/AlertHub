@@ -374,18 +374,18 @@ Use these payloads for testing your webhook endpoint and processing pipeline.
 
 Before submitting, verify that your repository includes:
 
-- [ ] Laravel application with all **models, migrations, factories, and seeders**
-- [ ] **Multi-tenant middleware** with organization-scoped queries
-- [ ] **REST API** with resource transformation and includable relations
-- [ ] **Webhook processing endpoint** with async job dispatch
-- [ ] **Alert processing pipeline** using the Chain of Responsibility pattern
+- [/] Laravel application with all **models, migrations, factories, and seeders**
+- [/] **Multi-tenant middleware** with organization-scoped queries
+- [/] **REST API** with resource transformation and includable relations
+- [/] **Webhook processing endpoint** with async job dispatch
+- [/] **Alert processing pipeline** using the Chain of Responsibility pattern
 - [ ] **Event system** with correctly ordered listeners
 - [ ] **Queue jobs** with uniqueness constraints and retry handling
 - [ ] **AlertMetrics module** integrated with bug fixes applied
-- [ ] **`BUG_REPORT.md`** documenting each discovered bug
+- [/] **`BUG_REPORT.md`** documenting each discovered bug
 - [ ] **`README.md`** with setup instructions, architecture overview, API documentation, and design decisions
 - [ ] **PHPUnit tests** covering the pipeline, webhook flow, and bug fixes
-- [ ] **Database seeders** creating 2+ organizations with multiple projects
+- [/] **Database seeders** creating 2+ organizations with multiple projects
 - [ ] **Working demo flow**: create org -> create project -> register webhook source -> receive webhook -> trace to notification
 
 ---

@@ -2,9 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Models\Notification;
+use App\Models\Subscriber;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -13,55 +12,59 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Http;
 
-class SendNotification implements ShouldQueue, ShouldBeUnique
+class SendNotification implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    // Give network requests a bit more leeway (5 attempts)
+    /**
+     * The number of times the job may be attempted.
+     * Network requests (like emails/webhooks) get 5 attempts.
+     */
     public int $tries = 5;
     
-    // Exponential backoff: 10s, 30s, 2m, 10m
+    /**
+     * Exponential backoff in seconds: 10s, 30s, 2m, 10m
+     */
     public array $backoff = [10, 30, 120, 600];
 
-    public function __construct(public Notification $notification)
-    {
-    }
+    /**
+     * Create a new job instance.
+     */
+    public function __construct(
+        public Subscriber $subscriber,
+        public string $type,
+        public string $subject,
+        public array $body
+    ) {}
 
     /**
-     * The unique ID of the job.
+     * Execute the job.
      */
-    public function uniqueId(): string
-    {
-        // Guarantee we don't accidentally queue the exact same notification delivery twice
-        return (string) $this->notification->id;
-    }
-
     public function handle(): void
     {
-        // Using saveQuietly() so we don't trigger the NotificationCreated event again
-        $this->notification->status = 'processing';
-        $this->notification->saveQuietly();
-
         try {
-            if ($this->notification->channel === 'email') {
-                // Example of sending an email:
-                // Mail::to($this->notification->subscriber->email)->send(new AlertMail($this->notification));
-                Log::info("Simulated: Email sent to {$this->notification->subscriber->email}");
-            } elseif ($this->notification->channel === 'webhook') {
-                // Example of sending a webhook payload downstream:
-                // $url = $this->notification->subscriber->metadata['webhook_url'] ?? '';
-                // Http::timeout(10)->post($url, $this->notification->payload);
-                Log::info("Simulated: Webhook sent for notification {$this->notification->id}");
+            // If this is a digest, format and send the email
+            if ($this->type === 'digest') {
+                // In a real application, you would pass this data to a Mailable:
+                // Mail::to($this->subscriber->email)->send(new \App\Mail\AlertDigestMail($this->subject, $this->body));
+
+                Log::info("Simulated: Digest email sent successfully", [
+                    'subscriber_email' => $this->subscriber->email,
+                    'subject' => $this->subject,
+                    'alert_count' => $this->body['total_alerts'] ?? 0,
+                ]);
+            } 
+            // Handle other notification types (e.g., individual alerts, webhooks)
+            else {
+                Log::info("Simulated: {$this->type} notification sent", [
+                    'subscriber_email' => $this->subscriber->email,
+                    'subject' => $this->subject,
+                ]);
             }
 
-            // Mark as sent
-            $this->notification->status = 'sent';
-            $this->notification->sent_at = now();
-            $this->notification->saveQuietly();
-            
         } catch (\Exception $e) {
             // Re-throw the exception so Laravel's queue worker knows it failed 
-            // and can apply the backoff & retry logic.
+            // and can properly apply the backoff & retry logic.
             throw $e;
         }
     }
@@ -72,11 +75,10 @@ class SendNotification implements ShouldQueue, ShouldBeUnique
     public function failed(\Throwable $exception): void
     {
         Log::error('SendNotification job exhausted all retries and failed.', [
-            'notification_id' => $this->notification->id,
+            'subscriber_id' => $this->subscriber->id,
+            'type' => $this->type,
+            'subject' => $this->subject,
             'error' => $exception->getMessage(),
         ]);
-
-        $this->notification->status = 'failed';
-        $this->notification->saveQuietly();
     }
 }
